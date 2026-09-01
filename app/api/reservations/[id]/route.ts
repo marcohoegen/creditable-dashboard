@@ -27,8 +27,8 @@ export async function PATCH(
   }
 
   try {
-    await updateReservationStatus(params.id, status);
-    return NextResponse.json({ ok: true });
+    const result = await updateReservationStatus(params.id, status);
+    return NextResponse.json({ ok: true, charge: result.charge });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Update failed";
     return NextResponse.json({ error: message }, { status: 500 });

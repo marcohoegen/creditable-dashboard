@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import type { Reservation, ReservationStatus } from "@/types/db";
 import StatusBadge from "@/components/StatusBadge";
+import PaymentBadge from "@/components/PaymentBadge";
 import { eur } from "@/lib/format";
 
 type Filter = "all" | "upcoming" | "showed" | "no_show" | "cancelled" | "pending";
@@ -36,6 +37,7 @@ export default function ReservationsView({
   const [filter, setFilter] = useState<Filter>("upcoming");
   const [query, setQuery] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [showManual, setShowManual] = useState(false);
 
   const now = Date.now();
@@ -61,6 +63,7 @@ export default function ReservationsView({
   }, [rows, filter, query, now]);
 
   async function setStatus(id: string, status: ReservationStatus) {
+    setNotice(null);
     setBusyId(id);
     try {
       const res = await fetch(`/api/reservations/${id}`, {
@@ -69,13 +72,55 @@ export default function ReservationsView({
         body: JSON.stringify({ status }),
       });
       if (!res.ok) throw new Error();
+      const data = await res.json().catch(() => ({}));
+
+      // The charge is attempted after the status is saved, so it can fail
+      // independently. Say so rather than implying the fee was taken.
+      const charge = data.charge as
+        | { charged: boolean; reason?: string; error?: string }
+        | undefined;
       setRows((prev) =>
-        prev.map((r) => (r.id === id ? { ...r, status } : r)),
+        prev.map((r) =>
+          r.id === id
+            ? {
+                ...r,
+                status,
+                payment_status: charge?.charged ? "charged" : r.payment_status,
+              }
+            : r,
+        ),
       );
+      if (status === "no_show" && charge && !charge.charged) {
+        setNotice(noShowChargeNotice(charge));
+      } else if (status === "no_show" && charge?.charged) {
+        setNotice("No-show recorded and the fee was charged.");
+      }
     } catch {
-      alert("Could not update reservation.");
+      setNotice("Could not update reservation.");
     } finally {
       setBusyId(null);
+    }
+  }
+
+  /** Plain-language explanation of why a no-show fee did not get charged. */
+  function noShowChargeNotice(charge: {
+    reason?: string;
+    error?: string;
+  }): string {
+    switch (charge.reason) {
+      case "platform_not_configured":
+      case "payments_not_configured":
+        return "No-show recorded. Payments aren't switched on, so nothing was charged.";
+      case "demo_mode":
+        return "No-show recorded (demo mode — no payment was taken).";
+      case "no_card":
+        return "No-show recorded. This guest has no saved card, so nothing was charged.";
+      case "unreachable":
+        return "No-show recorded, but the payment service was unreachable. You can retry the charge later.";
+      default:
+        return `No-show recorded, but the fee could not be charged${
+          charge.error ? `: ${charge.error}` : "."
+        }`;
     }
   }
 
@@ -86,6 +131,18 @@ export default function ReservationsView({
 
   return (
     <div className="space-y-4">
+      {notice && (
+        <div className="flex items-start justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <span>{notice}</span>
+          <button
+            type="button"
+            onClick={() => setNotice(null)}
+            className="text-amber-700 underline"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap gap-1">
           {FILTERS.map((f) => (
@@ -133,9 +190,10 @@ export default function ReservationsView({
               <th className="px-4 py-2 font-medium">When</th>
               <th className="px-4 py-2 font-medium">Guest</th>
               <th className="px-4 py-2 font-medium">Party</th>
-              <th className="px-4 py-2 font-medium">Deposit</th>
+              <th className="px-4 py-2 font-medium">No-show fee</th>
               <th className="px-4 py-2 font-medium">Source</th>
               <th className="px-4 py-2 font-medium">Status</th>
+              <th className="px-4 py-2 font-medium">Payment</th>
               <th className="px-4 py-2 font-medium">Actions</th>
             </tr>
           </thead>
@@ -155,6 +213,9 @@ export default function ReservationsView({
                   <td className="px-4 py-2 text-gray-500">{r.source ?? "web"}</td>
                   <td className="px-4 py-2">
                     <StatusBadge status={r.status} />
+                  </td>
+                  <td className="px-4 py-2">
+                    <PaymentBadge status={r.payment_status} />
                   </td>
                   <td className="px-4 py-2">
                     {actionable ? (

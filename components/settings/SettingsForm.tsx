@@ -17,6 +17,7 @@ export default function SettingsForm({
     address: restaurant.address,
     description: restaurant.description,
     deposit_amount: restaurant.deposit_amount,
+    cancellation_cutoff_hours: restaurant.cancellation_cutoff_hours ?? 24,
   });
   const [rows, setRows] = useState(
     [...hours].sort((a, b) => a.weekday - b.weekday || a.open_time.localeCompare(b.open_time)),
@@ -97,7 +98,7 @@ export default function SettingsForm({
           Deposit policy
         </h2>
         <p className="mb-3 text-xs text-gray-500">
-          Refundable deposit charged per guest at booking.
+          Charged per guest only if they don&apos;t show up. Nothing is taken at booking.
         </p>
         <div className="flex items-center gap-2">
           <span className="text-gray-500">€</span>
@@ -115,6 +116,35 @@ export default function SettingsForm({
             className="input w-28"
           />
           <span className="text-sm text-gray-500">per guest</span>
+        </div>
+
+        <h2 className="mb-1 mt-5 text-sm font-semibold text-gray-700">
+          Free cancellation cutoff
+        </h2>
+        <p className="mb-3 text-xs text-gray-500">
+          How long before the table a guest can still cancel free of charge.
+          This is what makes the fee defensible if a guest disputes it — set it
+          too short and chargebacks get harder to win.
+        </p>
+        <div className="flex items-center gap-2">
+          <input
+            type="number"
+            min={0}
+            max={168}
+            step={1}
+            value={profile.cancellation_cutoff_hours}
+            onChange={(e) =>
+              setProfile({
+                ...profile,
+                cancellation_cutoff_hours: Math.min(
+                  168,
+                  Math.max(0, Number(e.target.value) || 0),
+                ),
+              })
+            }
+            className="input w-28"
+          />
+          <span className="text-sm text-gray-500">hours before the table</span>
         </div>
       </section>
 

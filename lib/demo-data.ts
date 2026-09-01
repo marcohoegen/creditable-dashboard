@@ -18,6 +18,7 @@ export const DEMO_RESTAURANT: Restaurant = {
   image_url:
     "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800&q=60",
   deposit_amount: 20,
+  cancellation_cutoff_hours: 24,
 };
 
 // Dinner Tue–Sun (closed Mon) + weekend lunch — gives a richer heatmap.
@@ -162,11 +163,16 @@ export function generateDemoReservations(now: Date = new Date()): Reservation[] 
           source,
           confirmed_at: createdAt,
           notes: null,
+          // Payment state mirrors the guest app (0004): a web booking saves a
+          // card, a staff-entered walk-in has none to save.
+          payment_status: source === "manual" ? "not_required" : "card_ready",
         };
 
         if (slotAtMs > nowMs) {
-          // Upcoming: mostly confirmed, some still pending deposit.
-          r.status = rand() < 0.2 ? "pending_deposit" : "confirmed";
+          // Upcoming: mostly confirmed, some still awaiting their card.
+          const pending = rand() < 0.2;
+          r.status = pending ? "pending_deposit" : "confirmed";
+          if (pending && source === "web") r.payment_status = "awaiting_card";
         } else {
           // Past: resolve the outcome.
           const roll = rand();
@@ -178,9 +184,24 @@ export function generateDemoReservations(now: Date = new Date()): Reservation[] 
           } else if (roll < 0.2) {
             r.status = "no_show";
             r.no_show_marked_at = new Date(slotAtMs + 7_200_000).toISOString();
+            // A no-show with a saved card is where the fee is actually taken;
+            // a small share fail (expired card, issuer decline) so the
+            // dashboard shows that state rather than pretending it never happens.
+            if (r.payment_status === "card_ready") {
+              const declined = rand() < 0.12;
+              r.payment_status = declined ? "charge_failed" : "charged";
+              if (!declined) {
+                r.charged_amount = r.deposit_amount;
+                r.charged_at = r.no_show_marked_at;
+              } else {
+                r.last_payment_error = "Your card was declined.";
+              }
+            }
           } else {
             r.status = "showed";
             r.checked_in_at = slotAt;
+            // Showed up → nothing is charged.
+            if (r.payment_status === "card_ready") r.payment_status = "card_ready";
           }
         }
         r.updated_at = r.cancelled_at ?? r.no_show_marked_at ?? r.checked_in_at ?? createdAt;
@@ -188,6 +209,24 @@ export function generateDemoReservations(now: Date = new Date()): Reservation[] 
         reservations.push(r);
       }
     }
+  }
+
+  // Leave a handful of just-finished bookings with no outcome recorded, so the
+  // "needs review" queue is always visible in the demo. Deterministic rather
+  // than probabilistic: a feature a prospect never sees may as well not exist.
+  const graceCutoff = nowMs - 90 * 60_000;
+  const recentlyFinished = reservations
+    .filter((r) => {
+      const t = new Date(r.slot_at).getTime();
+      return t < graceCutoff && t > nowMs - 2 * MS_PER_DAY && r.status === "showed";
+    })
+    .sort((a, b) => b.slot_at.localeCompare(a.slot_at))
+    .slice(0, 3);
+
+  for (const r of recentlyFinished) {
+    r.status = "confirmed";
+    delete r.checked_in_at;
+    r.updated_at = r.created_at;
   }
 
   return reservations;

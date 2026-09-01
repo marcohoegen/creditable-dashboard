@@ -85,20 +85,51 @@ consider upstreaming. `types/db.ts` mirrors the schema — keep them in sync.
 
 ## Conventions
 
-- **Deposit semantics:** restaurant `deposit_amount` is **per guest**; a reservation's
-  deposit = `deposit_amount × party_size`. Outcomes are derived from status:
-  `showed` → refunded, `no_show` → captured (recovered revenue), active → held.
-  Payments are **not** wired (roadmap) — the dashboard models money, doesn't move it.
+- **It is a no-show fee, not a deposit.** `deposit_amount` is **per guest** and
+  nothing is taken at booking; the guest saves a card and is charged only on a
+  no-show. Metric names in `lib/metrics.ts` still say "deposits" (held /
+  refunded / captured) — that is the internal vocabulary, but **guest- and
+  partner-facing copy must not**: it reads "covered by card", "not charged",
+  "fees recovered".
+- **`payment_status` is separate from `status`** — the booking lifecycle vs. the
+  saved card (`not_required → awaiting_card → card_ready → charging → charged |
+  charge_failed`). `PaymentBadge` shows it so staff can see, before pressing
+  No-show, whether it will actually charge anyone.
 - **Status lifecycle:** `pending_deposit → confirmed → showed | no_show | cancelled`.
   Reservation actions stamp the matching timestamp (`STATUS_TIMESTAMP` map).
 - **Keep demo data realistic & deterministic** (`lib/demo-data.ts` uses a seeded RNG).
 - TypeScript strict, path alias `@/*`, Tailwind `brand` palette.
 
+## Charging a no-show (Phase 4)
+
+Marking a reservation `no_show` can take real money. The Stripe rails live in
+the **guest app** — it owns the keys, the webhook and the `payment_events` audit
+trail — so this repo does NOT charge cards itself. [`lib/platform.ts`](./lib/platform.ts)
+calls the guest app's `POST /api/internal/reservations/:id/charge-no-show`,
+authenticated with a shared `INTERNAL_API_SECRET`. **Do not add a Stripe SDK
+here**: two implementations of money movement will drift, and only one of them
+will be the one that got audited.
+
+The status change is committed **before** the charge is attempted, deliberately:
+what happened in the dining room is a fact staff recorded, and must not be lost
+because Stripe was briefly unreachable. The charge outcome comes back in the
+PATCH response so the UI can say whether money actually moved; `charge_failed`
+remains chargeable, so a decline can be retried.
+
+Unconfigured (`PLATFORM_API_URL`/`INTERNAL_API_SECRET` unset) is a supported
+mode — no-shows are recorded, nothing is charged.
+
+**No-show marking is never automatic.** [`lib/no-show-review.ts`](./lib/no-show-review.ts)
+surfaces bookings whose service has passed with no outcome recorded, as a
+review queue on the overview; a human still decides. Auto-charging would turn
+every forgotten tap on "Showed" into a chargeback the restaurant loses. Extend
+[`test/no-show-review.test.ts`](./test/no-show-review.test.ts) when you touch it.
+
 ## Scope guardrails
 
-Out of scope (roadmap in `CONCEPT.md`): Stripe deposit capture/refund execution;
-cross-restaurant benchmarks; multi-location rollups; automated no-show/reminder
-messaging. **Don't merge with the guest app or create a monorepo.**
+Out of scope (roadmap in `CONCEPT.md`): cross-restaurant benchmarks;
+multi-location rollups; venue self-onboarding (restaurants are still created by
+hand in SQL). **Don't merge with the guest app or create a monorepo.**
 
 ## Git workflow
 

@@ -14,7 +14,8 @@ export default async function ReservationsPage() {
       <header>
         <h1 className="text-xl font-bold">Reservations</h1>
         <p className="text-sm text-gray-500">
-          Manage bookings · mark guests showed or no-show to settle deposits
+          Manage bookings · mark guests showed or no-show. A no-show charges
+          the saved card.
         </p>
       </header>
       <ReservationsView

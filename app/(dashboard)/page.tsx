@@ -1,4 +1,6 @@
 import Card from "@/components/Card";
+import NeedsReviewList from "@/components/reservations/NeedsReviewList";
+import { pendingReview } from "@/lib/no-show-review";
 import KpiCard from "@/components/kpi/KpiCard";
 import StatusBadge from "@/components/StatusBadge";
 import TrendLineChart from "@/components/charts/TrendLineChart";
@@ -44,6 +46,12 @@ export default async function OverviewPage() {
   const depositsHeldToday = depositOutcomes(todayRs).held;
   const noShowsToday = todayRs.filter((r) => r.status === "no_show").length;
 
+  // Service is over and nobody marked these seated, no-show or cancelled. They
+  // are surfaced for a human decision rather than auto-marked: automatically
+  // charging a guest because staff forgot to tap "seated" is how you lose
+  // chargebacks. See lib/no-show-review.ts.
+  const needsReview = pendingReview(reservations, now).slice(0, 8);
+
   const upcoming = reservations
     .filter((r) => new Date(r.slot_at) > now && isActive(r))
     .sort((a, b) => a.slot_at.localeCompare(b.slot_at))
@@ -75,7 +83,7 @@ export default async function OverviewPage() {
             value={pct(todayUtil)}
             sub={`${expectedCovers}/${todayCapacity} seats`}
           />
-          <Snapshot label="Deposits held" value={eur(depositsHeldToday)} />
+          <Snapshot label="Covered by card" value={eur(depositsHeldToday)} />
           <Snapshot label="No-shows today" value={String(noShowsToday)} />
         </div>
       </Card>
@@ -109,7 +117,7 @@ export default async function OverviewPage() {
           trend={series.map((p) => p.covers)}
         />
         <KpiCard
-          label="Deposit revenue recovered"
+          label="No-show fees recovered"
           value={eur(cur.deposits.captured)}
           sub="captured from no-shows"
           delta={delta(cur.deposits.captured, prev.deposits.captured)}
@@ -138,6 +146,8 @@ export default async function OverviewPage() {
           <StatusDonut data={donut} />
         </Card>
       </div>
+
+      {needsReview.length > 0 && <NeedsReviewList reservations={needsReview} />}
 
       {/* Upcoming */}
       <Card title="Upcoming reservations">

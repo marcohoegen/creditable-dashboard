@@ -14,7 +14,7 @@ export default async function SettingsPage() {
       <header>
         <h1 className="text-xl font-bold">Settings</h1>
         <p className="text-sm text-gray-500">
-          Profile, deposit policy, and opening hours
+          Profile, no-show fee and cancellation policy, opening hours
         </p>
       </header>
       <SettingsForm restaurant={restaurant} hours={hours} />

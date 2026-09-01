@@ -153,22 +153,22 @@ export default async function AnalyticsPage({
         </Card>
       </div>
 
-      {/* Deposit economics + lost inventory */}
+      {/* No-show fee economics + lost inventory */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <KpiCard
-          label="Deposits held"
+          label="Covered by card"
           value={eur(cur.deposits.held)}
-          sub="outstanding on active bookings"
+          sub="fee exposure on active bookings"
         />
         <KpiCard
-          label="Deposits refunded"
+          label="Not charged"
           value={eur(cur.deposits.refunded)}
-          sub="returned to guests who showed"
+          sub="guests who showed up"
         />
         <KpiCard
-          label="Revenue recovered"
+          label="Fees recovered"
           value={eur(cur.deposits.captured)}
-          sub="captured from no-shows"
+          sub="charged to no-shows"
           higherIsBetter
         />
         <KpiCard

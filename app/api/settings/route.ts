@@ -33,6 +33,12 @@ export async function PATCH(request: Request) {
         address: profile.address ?? "",
         description: profile.description ?? "",
         deposit_amount: Math.max(0, Number(profile.deposit_amount) || 0),
+        // Clamped server-side too: the cutoff decides whether a fee is
+        // defensible, so it must not be settable to anything by a crafted request.
+        cancellation_cutoff_hours: Math.min(
+          168,
+          Math.max(0, Number(profile.cancellation_cutoff_hours) || 0),
+        ),
       },
       Array.isArray(hours) ? hours : [],
     );

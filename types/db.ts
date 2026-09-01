@@ -2,6 +2,16 @@
 // guest app (supabase/migrations/0001_init.sql); the dashboard adds the
 // status-transition timestamps and metadata in 0002_dashboard.sql.
 
+/** Card state for the no-show fee (guest app, 0004_payments.sql). */
+export type PaymentStatus =
+  | "not_required"
+  | "awaiting_card"
+  | "card_ready"
+  | "card_failed"
+  | "charging"
+  | "charged"
+  | "charge_failed";
+
 export type ReservationStatus =
   | "pending_deposit"
   | "confirmed"
@@ -22,6 +32,8 @@ export interface Restaurant {
   image_url: string | null;
   /** Refundable deposit charged per guest, in EUR. */
   deposit_amount: number;
+  /** Hours before the slot up to which a guest may cancel free (0005). */
+  cancellation_cutoff_hours?: number;
   created_at?: string;
 }
 
@@ -46,6 +58,12 @@ export interface Reservation {
   deposit_amount: number;
   status: ReservationStatus;
   created_at: string; // ISO — when the booking was made
+  // Payment state, owned by the guest app (0004_payments.sql). `payment_status`
+  // is separate from `status`: the booking lifecycle vs. the saved card.
+  payment_status?: PaymentStatus | null;
+  charged_amount?: number | null;
+  charged_at?: string | null;
+  last_payment_error?: string | null;
   // Added by 0002_dashboard.sql (all optional; only set once a transition happens):
   confirmed_at?: string | null;
   cancelled_at?: string | null;

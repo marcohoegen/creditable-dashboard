@@ -8,6 +8,8 @@ export interface SettingsProfile {
   address: string;
   description: string;
   deposit_amount: number;
+  /** Hours before the slot up to which a guest may cancel free of charge. */
+  cancellation_cutoff_hours: number;
 }
 
 /**
@@ -30,6 +32,7 @@ export async function updateSettings(
       address: profile.address,
       description: profile.description,
       deposit_amount: profile.deposit_amount,
+      cancellation_cutoff_hours: profile.cancellation_cutoff_hours,
     })
     .eq("id", restaurant.id);
   if (profileErr) throw new Error(profileErr.message);
