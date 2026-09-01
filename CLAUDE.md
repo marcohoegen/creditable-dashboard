@@ -66,6 +66,20 @@ Base tables (`restaurants`, `restaurant_hours`, `reservations`) are owned by the
   `no_show_marked_at`, `confirmed_at`, `updated_at`) + `notes`, `source`;
 - the `restaurant_daily_stats` view.
 
+Plus [`0003_reservation_read.sql`](./supabase/migrations/0003_reservation_read.sql):
+the restaurant-scoped **SELECT** policy on `reservations`. The dashboard used to
+rely on the guest app's `reservations_public_read using (true)` for reads — which
+also exposed every guest name and email to anyone with the public anon key. The
+guest app's `0003_data_safety.sql` drops that policy, so **this migration must be
+applied or the dashboard reads zero reservations in live mode.** Both repos ship
+the same policy, guarded/idempotent, so migration order between them doesn't
+matter.
+
+Guest reservation *writes* now go through the guest app's `book_slot()` function
+(atomic capacity check); direct inserts into `reservations` are no longer
+permitted for `anon`. Dashboard-side manual bookings via `POST /api/reservations`
+run as an authenticated restaurant user and are unaffected.
+
 The guest app stays the canonical schema owner; keep changes here additive and
 consider upstreaming. `types/db.ts` mirrors the schema — keep them in sync.
 
